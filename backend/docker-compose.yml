@@ -1,0 +1,24 @@
+# 로컬 개발용 MariaDB (선택)
+# 사용: docker compose up -d
+# 종료: docker compose down
+services:
+  mariadb:
+    image: mariadb:10.6
+    container_name: attendance-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: attendance
+      MARIADB_USER: attendance
+      MARIADB_PASSWORD: local
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mariadb_data:

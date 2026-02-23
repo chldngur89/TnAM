@@ -1,0 +1,25 @@
+{
+  "name": "slack-attendance-ai",
+  "version": "1.0.0",
+  "description": "Slack attendance assistant with Ollama, MariaDB/MySQL, and optional geofence",
+  "type": "module",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js",
+    "dev:local": "node --watch src/app.js",
+    "db:migrate": "node src/attendance/migrate.js",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.17.0",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "mysql2": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
