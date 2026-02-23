@@ -547,6 +547,9 @@ webApp.post('/api/location', express.json(), async (req, res) => {
 
 // ----- Start -----
 (async () => {
+  console.log(
+    `[startup] attendance-bot ver${config.app.displayVersion} (raw ${config.app.version}) dashboard=${config.web.dashboardUrl || '(none)'}`
+  );
   webApp.listen(config.port, '0.0.0.0', () => {
     console.log(`Slack Attendance AI listening on 0.0.0.0:${config.port}`);
   });

@@ -48,7 +48,7 @@ function normalizeDashboardUrl(raw) {
 }
 
 const packageVersion = readBackendPackageVersion();
-const appVersion = env('APP_VERSION', packageVersion);
+const appVersion = packageVersion;
 const dashboardUrl = normalizeDashboardUrl(env('WEB_DASHBOARD_URL', FALLBACK_DASHBOARD_URL));
 
 export const config = {
