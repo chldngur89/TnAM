@@ -32,12 +32,46 @@ const app = new App({
   receiver: expressReceiver,
 });
 
-const expressApp = expressReceiver.router;
+const webApp = express();
 
 function toDateKey(value) {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   return String(value).slice(0, 10);
 }
+
+// ----- Basic health endpoint for EC2/LB checks -----
+webApp.get('/', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+// ----- Slack URL verification / event callback quick ack -----
+webApp.post('/slack/events', (req, res, next) => {
+  // Real Slack requests include signature headers.
+  // Let Bolt handle signed requests to preserve verification + full event handling.
+  if (req.headers['x-slack-signature']) {
+    return next();
+  }
+
+  // Fallback path for manual/local curl tests without Slack signature headers.
+  return express.json()(req, res, (err) => {
+    if (err) {
+      return res.status(400).send('invalid json');
+    }
+
+    const payload = req.body || {};
+    if (payload.type === 'url_verification') {
+      return res.status(200).send(payload.challenge);
+    }
+    if (payload.type === 'event_callback') {
+      console.log('Slack events payload:', payload);
+      return res.status(200).send('ok');
+    }
+    return next();
+  });
+});
+
+// Keep Bolt router mounted so slash commands / interactivity still work on /slack/events.
+webApp.use(expressReceiver.router);
 
 // ----- Slash command /attendance -----
 app.command('/attendance', async ({ command, ack, respond }) => {
@@ -340,13 +374,12 @@ app.message(async ({ message, client }) => {
 });
 
 // ----- Health -----
-expressApp.get('/health', (req, res) => {
+webApp.get('/health', (req, res) => {
   res.json({ ok: true, service: 'slack-attendance-ai' });
 });
 
 // ----- GPS location (for mobile/backend calling with lat/lng) -----
-expressApp.use(express.json());
-expressApp.post('/api/location', async (req, res) => {
+webApp.post('/api/location', express.json(), async (req, res) => {
   const { slack_user_id: slackUserId, lat, lng } = req.body || {};
   if (!slackUserId || typeof lat !== 'number' || typeof lng !== 'number') {
     return res.status(400).json({ error: 'slack_user_id, lat, lng required' });
@@ -362,6 +395,7 @@ expressApp.post('/api/location', async (req, res) => {
 
 // ----- Start -----
 (async () => {
-  await app.start(config.port);
-  console.log(`Slack Attendance AI listening on port ${config.port}`);
+  webApp.listen(config.port, '0.0.0.0', () => {
+    console.log(`Slack Attendance AI listening on 0.0.0.0:${config.port}`);
+  });
 })();

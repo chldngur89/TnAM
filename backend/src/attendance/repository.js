@@ -4,6 +4,15 @@
 import { query, getPool } from './db.js';
 import { toDateStringInTimezone, todayInTimezone } from './time.js';
 
+function toMySqlDateTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid datetime: ${value}`);
+  }
+  const iso = date.toISOString(); // YYYY-MM-DDTHH:mm:ss.sssZ
+  return `${iso.slice(0, 10)} ${iso.slice(11, 19)}.${iso.slice(20, 23)}000`;
+}
+
 export async function ensureUser(slackUserId, { email, displayName } = {}) {
   await query(
     `INSERT INTO users (slack_user_id, email, display_name)
@@ -42,6 +51,7 @@ export async function getLastClockInToday(slackUserId) {
 }
 
 export async function clockIn(slackUserId, clockInAt, source = 'manual', meta = {}) {
+  const clockInAtSql = toMySqlDateTime(clockInAt);
   const date = toDateStringInTimezone(clockInAt);
   const recordStatus = meta.recordStatus ?? 'present';
   const lateMinutes = Number.isFinite(meta.lateMinutes) ? Math.max(0, Number(meta.lateMinutes)) : 0;
@@ -60,7 +70,7 @@ export async function clockIn(slackUserId, clockInAt, source = 'manual', meta = 
     [
       slackUserId,
       date,
-      clockInAt,
+      clockInAtSql,
       source,
       recordStatus,
       lateMinutes,
@@ -76,12 +86,13 @@ export async function clockIn(slackUserId, clockInAt, source = 'manual', meta = 
      FROM attendance
      WHERE slack_user_id = ? AND date = ? AND clock_in_at = ?
      ORDER BY id DESC LIMIT 1`,
-    [slackUserId, date, clockInAt]
+    [slackUserId, date, clockInAtSql]
   );
   return row;
 }
 
 export async function clockOut(attendanceId, clockOutAt, source = 'manual', meta = {}) {
+  const clockOutAtSql = toMySqlDateTime(clockOutAt);
   const note = meta.note ?? null;
   const checkOutIp = meta.checkOutIp ?? null;
   const checkOutDeviceId = meta.checkOutDeviceId ?? null;
@@ -91,9 +102,9 @@ export async function clockOut(attendanceId, clockOutAt, source = 'manual', meta
   await query(
     `UPDATE attendance
      SET
-       clock_out_at = ?,
-       clock_out_source = ?,
-       worked_minutes = GREATEST(0, TIMESTAMPDIFF(MINUTE, clock_in_at, ?)),
+      clock_out_at = ?,
+      clock_out_source = ?,
+      worked_minutes = GREATEST(0, TIMESTAMPDIFF(MINUTE, clock_in_at, ?)),
        check_out_ip = COALESCE(?, check_out_ip),
        check_out_device_id = COALESCE(?, check_out_device_id),
        check_out_lat = COALESCE(?, check_out_lat),
@@ -102,9 +113,9 @@ export async function clockOut(attendanceId, clockOutAt, source = 'manual', meta
        updated_at = CURRENT_TIMESTAMP(6)
      WHERE id = ?`,
     [
-      clockOutAt,
+      clockOutAtSql,
       source,
-      clockOutAt,
+      clockOutAtSql,
       checkOutIp,
       checkOutDeviceId,
       checkOutLat,
