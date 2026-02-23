@@ -54,7 +54,7 @@ export const config = {
     connectionString: env('DATABASE_URL', 'mysql://root@localhost:3306/attendance'),
   },
   web: {
-    dashboardUrl: env('WEB_DASHBOARD_URL', ''),
+    dashboardUrl: env('WEB_DASHBOARD_URL', 'https://sixpenny-bacterioscopic-wava.ngrok-free.dev'),
   },
   attendance: {
     defaultWorkStart: env('ATTENDANCE_WORK_START', '09:00'),

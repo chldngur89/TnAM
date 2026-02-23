@@ -136,25 +136,9 @@ function buildHomeView({ todayRows, isWorking, flashMessage = '' }) {
     { type: 'divider' },
     {
       type: 'actions',
-      elements: [clockInButton],
-    },
-    {
-      type: 'actions',
-      elements: [clockOutButton],
-    },
-    {
-      type: 'actions',
       elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: '시간 정정 요청', emoji: true },
-          action_id: 'attendance_request_correction',
-        },
-      ],
-    },
-    {
-      type: 'actions',
-      elements: [
+        clockInButton,
+        clockOutButton,
         {
           type: 'button',
           text: { type: 'plain_text', text: '오늘 현황 확인', emoji: true },
@@ -165,6 +149,11 @@ function buildHomeView({ todayRows, isWorking, flashMessage = '' }) {
     {
       type: 'actions',
       elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '시간 정정 요청', emoji: true },
+          action_id: 'attendance_request_correction',
+        },
         {
           type: 'button',
           text: { type: 'plain_text', text: '주간 리포트', emoji: true },
