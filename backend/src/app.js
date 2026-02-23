@@ -39,6 +39,302 @@ function toDateKey(value) {
   return String(value).slice(0, 10);
 }
 
+function formatHomeTime(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toLocaleTimeString('ko-KR', {
+    timeZone: config.attendance.timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatHomeDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toLocaleDateString('ko-KR', {
+    timeZone: config.attendance.timezone,
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  });
+}
+
+function buildHomeView({ todayRows, isWorking, flashMessage = '' }) {
+  const rows = Array.isArray(todayRows) ? todayRows : [];
+  const calc = rules.calculateDayAttendance(rows);
+  const now = new Date();
+  const nowTime = formatHomeTime(now);
+  const nowDate = formatHomeDate(now);
+  const firstClockIn = rows[0]?.clock_in_at ? formatHomeTime(rows[0].clock_in_at) : '-';
+  const latest = rows[rows.length - 1];
+  const lastClockOut = latest?.clock_out_at
+    ? formatHomeTime(latest.clock_out_at)
+    : isWorking
+      ? '진행 중'
+      : '-';
+  const statusText = isWorking ? '근무 중' : '대기/퇴근';
+
+  const clockInButton = {
+    type: 'button',
+    text: { type: 'plain_text', text: '출근하기', emoji: true },
+    action_id: 'attendance_clock_in',
+  };
+  if (!isWorking) clockInButton.style = 'primary';
+
+  const clockOutButton = {
+    type: 'button',
+    text: { type: 'plain_text', text: '퇴근하기', emoji: true },
+    action_id: 'attendance_clock_out',
+  };
+  if (isWorking) clockOutButton.style = 'primary';
+
+  const blocks = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: '🕐 출퇴근 도우미', emoji: true },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*안녕하세요! 👋*\n출퇴근 관리를 도와드리겠습니다. 아래 버튼을 선택하거나 자연어로 명령해주세요.',
+      },
+    },
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: nowTime, emoji: true },
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `${nowDate} · 상태: *${statusText}*`,
+        },
+      ],
+    },
+    { type: 'divider' },
+    {
+      type: 'actions',
+      elements: [clockInButton],
+    },
+    {
+      type: 'actions',
+      elements: [clockOutButton],
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '시간 정정 요청', emoji: true },
+          action_id: 'attendance_request_correction',
+        },
+      ],
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '오늘 현황 확인', emoji: true },
+          action_id: 'attendance_today_status',
+        },
+      ],
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '주간 리포트', emoji: true },
+          action_id: 'attendance_weekly_summary',
+        },
+      ],
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*오늘 기록 건수*\n${rows.length}건` },
+        { type: 'mrkdwn', text: `*오늘 누적 근무*\n${calc.totalFormatted}` },
+        { type: 'mrkdwn', text: `*출근 시간*\n${firstClockIn}` },
+        { type: 'mrkdwn', text: `*퇴근 시간*\n${lastClockOut}` },
+        { type: 'mrkdwn', text: `*지각 여부*\n${calc.late ? '지각' : '정상'}` },
+        { type: 'mrkdwn', text: `*현재 상태*\n${statusText}` },
+      ],
+    },
+    { type: 'divider' },
+    {
+      type: 'input',
+      block_id: 'attendance_home_nl_input',
+      optional: true,
+      label: { type: 'plain_text', text: '또는 자연어로 말씀해주세요:' },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'attendance_home_nl_text',
+        multiline: false,
+        placeholder: {
+          type: 'plain_text',
+          text: '예: 오늘 9시 20분에 출근했어요',
+        },
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '전송', emoji: true },
+          action_id: 'attendance_home_nl_submit',
+          style: 'primary',
+        },
+      ],
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `현재 상태: ${statusText}. 채널/DM에서도 자연어로 요청할 수 있습니다.`,
+        },
+      ],
+    },
+  ];
+
+  if (flashMessage) {
+    blocks.splice(1, 0, {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `✅ ${flashMessage}` },
+    });
+  }
+
+  return {
+    type: 'home',
+    callback_id: 'attendance_home',
+    blocks,
+  };
+}
+
+async function publishHome(client, userId, { flashMessage = '' } = {}) {
+  const todayRows = await repo.getTodayAttendance(userId);
+  const last = await repo.getLastClockInToday(userId);
+  await client.views.publish({
+    user_id: userId,
+    view: buildHomeView({ todayRows, isWorking: Boolean(last), flashMessage }),
+  });
+}
+
+async function postActionFeedback(client, body, userId, text) {
+  const channelId = body?.channel?.id ?? body?.container?.channel_id ?? null;
+  if (channelId) {
+    await client.chat.postEphemeral({
+      channel: channelId,
+      user: userId,
+      text,
+      blocks: ephemeralBlocks(text),
+    });
+    return;
+  }
+  await publishHome(client, userId, { flashMessage: text });
+}
+
+async function getWeeklySummaryText(userId) {
+  const endStr = todayInTimezone();
+  const startStr = addDays(endStr, -6);
+  const rows = await repo.getWeeklyAttendance(userId, startStr, endStr);
+  const dayMap = {};
+  for (const r of rows) {
+    const d = toDateKey(r.date);
+    if (!dayMap[d]) dayMap[d] = [];
+    dayMap[d].push(r);
+  }
+
+  let totalMinutes = 0;
+  let lateCount = 0;
+  const lines = [];
+  const days = Object.keys(dayMap).sort();
+  for (const d of days) {
+    const recs = dayMap[d];
+    const calc = rules.calculateDayAttendance(recs);
+    totalMinutes += calc.totalMinutes;
+    if (calc.late) lateCount++;
+    const label = new Date(d + 'Z').toLocaleDateString('ko-KR', { weekday: 'short', month: 'numeric', day: 'numeric' });
+    lines.push(`• ${label}: ${calc.totalFormatted}${calc.late ? ' (지각)' : ''}`);
+  }
+
+  return (
+    `*이번 주 출퇴근 요약* (${startStr} ~ ${endStr})\n` +
+    (lines.length
+      ? `${lines.join('\n')}\n*총 근무:* ${rules.formatDuration(totalMinutes)}\n*지각:* ${lateCount}회`
+      : '기록이 없습니다.')
+  );
+}
+
+async function handleNaturalLanguageForHome(text, userId) {
+  const intentResult = await extractIntent(text);
+  if (!intentResult) {
+    return OLLAMA_FALLBACK_MESSAGE;
+  }
+
+  const { intent, time, date, confidence } = intentResult;
+  if (confidence < 0.5) {
+    return '의도를 파악하기 어렵습니다. 다시 말씀해 주세요. 예: 오늘 9시 20분에 출근했어요';
+  }
+
+  const today = todayInTimezone();
+  const resolveDate = date ? date : today;
+
+  switch (intent) {
+    case 'clock_in': {
+      await repo.ensureUser(userId);
+      const already = await repo.getLastClockInToday(userId);
+      if (already) {
+        return '이미 오늘 출근 기록이 있습니다.';
+      }
+      const clockAt = time ? new Date(`${resolveDate}T${time}:00`) : new Date();
+      const late = rules.isLate(clockAt);
+      const record = await repo.clockIn(userId, clockAt.toISOString(), 'nl_home', {
+        recordStatus: late ? 'late' : 'present',
+        lateMinutes: rules.lateMinutes(clockAt),
+      });
+      return `출근 기록했습니다. (${formatHomeTime(record.clock_in_at)})${late ? ' 지각으로 기록됩니다.' : ''}`;
+    }
+    case 'clock_out': {
+      const last = await repo.getLastClockInToday(userId);
+      if (!last) {
+        return '출근 기록이 없습니다. 먼저 출근하기를 눌러 주세요.';
+      }
+      const clockAt = time ? new Date(`${resolveDate}T${time}:00`) : new Date();
+      await repo.clockOutByRecord(last, clockAt.toISOString(), 'nl_home');
+      const minutes = rules.workingMinutes(last.clock_in_at, clockAt);
+      return `퇴근 기록했습니다. (${formatHomeTime(clockAt)}) 근무: ${rules.formatDuration(minutes)}`;
+    }
+    case 'correction':
+      return `정정 요청 입력: (${time || '시간'} ${resolveDate})\n관리자에게 요청해 주세요.`;
+    case 'summary':
+      return getWeeklySummaryText(userId);
+    case 'question': {
+      const todayRecords = await repo.getTodayAttendance(userId);
+      const last = await repo.getLastClockInToday(userId);
+      if (todayRecords.length === 0) {
+        return '오늘 출근 기록이 없습니다.';
+      }
+      const calc = rules.calculateDayAttendance(todayRecords);
+      return `오늘 근무: ${calc.totalFormatted}${calc.late ? ' (지각)' : ''}. ${last ? '현재 출근 중입니다.' : '퇴근했습니다.'}`;
+    }
+    default:
+      return '요청을 처리할 수 없습니다. 출근/퇴근/요약/정정 요청 형태로 입력해 주세요.';
+  }
+}
+
+function readHomeInputText(body) {
+  const values = body?.state?.values ?? {};
+  const block = values.attendance_home_nl_input ?? {};
+  const textValue = block.attendance_home_nl_text?.value;
+  return typeof textValue === 'string' ? textValue.trim() : '';
+}
+
 // ----- Basic health endpoint for EC2/LB checks -----
 webApp.get('/', (req, res) => {
   res.status(200).json({ status: 'ok' });
@@ -79,6 +375,7 @@ app.command('/attendance', async ({ command, ack, respond }) => {
 
   const userId = command.user_id;
   await repo.ensureUser(userId, { displayName: command.user_name });
+  await publishHome(app.client, userId);
 
   await respond({
     response_type: 'ephemeral',
@@ -94,12 +391,12 @@ app.action('attendance_clock_in', async ({ ack, body, client }) => {
 
   const already = await repo.getLastClockInToday(userId);
   if (already) {
-    await client.chat.postEphemeral({
-      channel: body.channel.id,
-      user: userId,
-      text: '이미 오늘 출근 기록이 있습니다.',
-      blocks: ephemeralBlocks('이미 오늘 출근 기록이 있습니다. 퇴근 후 다시 출근할 수 있습니다.'),
-    });
+    await postActionFeedback(
+      client,
+      body,
+      userId,
+      '이미 오늘 출근 기록이 있습니다. 퇴근 후 다시 출근할 수 있습니다.'
+    );
     return;
   }
 
@@ -114,14 +411,14 @@ app.action('attendance_clock_in', async ({ ack, body, client }) => {
     minute: '2-digit',
   });
 
-  await client.chat.postEphemeral({
-    channel: body.channel.id,
-    user: userId,
-    text: `출근 완료: ${timeStr}`,
-    blocks: ephemeralBlocks(
-      `✅ *출근 완료*\n시각: ${timeStr}${late ? '\n⚠️ 지각으로 기록됩니다.' : ''}`
-    ),
-  });
+  await postActionFeedback(
+    client,
+    body,
+    userId,
+    `출근 완료: ${timeStr}${late ? ' (지각)' : ''}`
+  );
+
+  await publishHome(client, userId);
 });
 
 // ----- Button: Clock Out -----
@@ -131,12 +428,7 @@ app.action('attendance_clock_out', async ({ ack, body, client }) => {
 
   const last = await repo.getLastClockInToday(userId);
   if (!last) {
-    await client.chat.postEphemeral({
-      channel: body.channel.id,
-      user: userId,
-      text: '출근 기록이 없습니다.',
-      blocks: ephemeralBlocks('출근 기록이 없습니다. 먼저 출근하기를 눌러 주세요.'),
-    });
+    await postActionFeedback(client, body, userId, '출근 기록이 없습니다. 먼저 출근하기를 눌러 주세요.');
     return;
   }
 
@@ -148,27 +440,25 @@ app.action('attendance_clock_out', async ({ ack, body, client }) => {
     minute: '2-digit',
   });
 
-  await client.chat.postEphemeral({
-    channel: body.channel.id,
-    user: userId,
-    text: `퇴근 완료: ${timeStr}`,
-    blocks: ephemeralBlocks(
-      `✅ *퇴근 완료*\n시각: ${timeStr}\n오늘 근무: ${rules.formatDuration(minutes)}`
-    ),
-  });
+  await postActionFeedback(
+    client,
+    body,
+    userId,
+    `퇴근 완료: ${timeStr}, 오늘 근무 ${rules.formatDuration(minutes)}`
+  );
+
+  await publishHome(client, userId);
 });
 
 // ----- Button: Request Correction -----
 app.action('attendance_request_correction', async ({ ack, body, client }) => {
   await ack();
-  await client.chat.postEphemeral({
-    channel: body.channel.id,
-    user: body.user.id,
-    text: '시간 정정 요청',
-    blocks: ephemeralBlocks(
-      '시간 정정이 필요하면 채널에 자연어로 남겨 주세요. 예: "2월 12일 출근 시간을 08:55로 바꿔 주세요"\n또는 관리자에게 요청해 주세요.'
-    ),
-  });
+  await postActionFeedback(
+    client,
+    body,
+    body.user.id,
+    '시간 정정은 자연어로 남겨 주세요. 예: "2월 12일 출근 시간을 08:55로 바꿔 주세요"'
+  );
 });
 
 // ----- Button: Weekly Summary -----
@@ -176,40 +466,49 @@ app.action('attendance_weekly_summary', async ({ ack, body, client }) => {
   await ack();
   const userId = body.user.id;
 
-  const endStr = todayInTimezone();
-  const startStr = addDays(endStr, -6);
+  const text = await getWeeklySummaryText(userId);
 
-  const rows = await repo.getWeeklyAttendance(userId, startStr, endStr);
-  const dayMap = {};
-  for (const r of rows) {
-    const d = toDateKey(r.date);
-    if (!dayMap[d]) dayMap[d] = [];
-    dayMap[d].push(r);
+  await postActionFeedback(client, body, userId, text);
+
+  await publishHome(client, userId);
+});
+
+app.action('attendance_today_status', async ({ ack, body, client }) => {
+  await ack();
+  const userId = body.user.id;
+  const todayRows = await repo.getTodayAttendance(userId);
+  const last = await repo.getLastClockInToday(userId);
+  const calc = rules.calculateDayAttendance(todayRows);
+  const msg =
+    `오늘 근무: ${calc.totalFormatted}${calc.late ? ' (지각)' : ''}. ` +
+    `${last ? '현재 출근 중입니다.' : '현재 퇴근/미출근 상태입니다.'}`;
+  await postActionFeedback(client, body, userId, msg);
+  await publishHome(client, userId);
+});
+
+app.action('attendance_home_nl_submit', async ({ ack, body, client }) => {
+  await ack();
+  const userId = body.user.id;
+  await repo.ensureUser(userId);
+
+  const text = readHomeInputText(body);
+  if (!text) {
+    await publishHome(client, userId, { flashMessage: '입력 후 전송해 주세요.' });
+    return;
   }
 
-  let totalMinutes = 0;
-  let lateCount = 0;
-  const lines = [];
-  const days = Object.keys(dayMap).sort();
-  for (const d of days) {
-    const recs = dayMap[d];
-    const calc = rules.calculateDayAttendance(recs);
-    totalMinutes += calc.totalMinutes;
-    if (calc.late) lateCount++;
-    const label = new Date(d + 'Z').toLocaleDateString('ko-KR', { weekday: 'short', month: 'numeric', day: 'numeric' });
-    lines.push(`• ${label}: ${calc.totalFormatted}${calc.late ? ' (지각)' : ''}`);
+  const message = await handleNaturalLanguageForHome(text, userId);
+  await publishHome(client, userId, { flashMessage: message });
+});
+
+// ----- App Home -----
+app.event('app_home_opened', async ({ event, client, logger }) => {
+  try {
+    await repo.ensureUser(event.user);
+    await publishHome(client, event.user);
+  } catch (error) {
+    logger.error('Failed to publish app home:', error);
   }
-
-  const text =
-    `*이번 주 출퇴근 요약* (${startStr} ~ ${endStr})\n` +
-    (lines.length ? lines.join('\n') + `\n*총 근무:* ${rules.formatDuration(totalMinutes)}\n*지각:* ${lateCount}회` : '기록이 없습니다.');
-
-  await client.chat.postEphemeral({
-    channel: body.channel.id,
-    user: userId,
-    text: '주간 요약',
-    blocks: ephemeralBlocks(text),
-  });
 });
 
 // ----- Natural language: app_mention or DM -----
