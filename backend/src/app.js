@@ -345,6 +345,7 @@ webApp.post('/slack/events', (req, res, next) => {
   // Real Slack requests include signature headers.
   // Let Bolt handle signed requests to preserve verification + full event handling.
   if (req.headers['x-slack-signature']) {
+    console.log('[slack/events] signed request:', req.method, req.headers['content-type'] || 'unknown');
     return next();
   }
 
@@ -374,6 +375,7 @@ app.command('/attendance', async ({ command, ack, respond }) => {
   await ack();
 
   const userId = command.user_id;
+  console.log('[command] /attendance user:', userId);
   await repo.ensureUser(userId, { displayName: command.user_name });
   await publishHome(app.client, userId);
 
@@ -387,6 +389,7 @@ app.command('/attendance', async ({ command, ack, respond }) => {
 app.action('attendance_clock_in', async ({ ack, body, client }) => {
   await ack();
   const userId = body.user.id;
+  console.log('[action] attendance_clock_in user:', userId);
   await repo.ensureUser(userId);
 
   const already = await repo.getLastClockInToday(userId);
@@ -425,6 +428,7 @@ app.action('attendance_clock_in', async ({ ack, body, client }) => {
 app.action('attendance_clock_out', async ({ ack, body, client }) => {
   await ack();
   const userId = body.user.id;
+  console.log('[action] attendance_clock_out user:', userId);
 
   const last = await repo.getLastClockInToday(userId);
   if (!last) {
@@ -453,6 +457,7 @@ app.action('attendance_clock_out', async ({ ack, body, client }) => {
 // ----- Button: Request Correction -----
 app.action('attendance_request_correction', async ({ ack, body, client }) => {
   await ack();
+  console.log('[action] attendance_request_correction user:', body.user.id);
   await postActionFeedback(
     client,
     body,
@@ -465,6 +470,7 @@ app.action('attendance_request_correction', async ({ ack, body, client }) => {
 app.action('attendance_weekly_summary', async ({ ack, body, client }) => {
   await ack();
   const userId = body.user.id;
+  console.log('[action] attendance_weekly_summary user:', userId);
 
   const text = await getWeeklySummaryText(userId);
 
@@ -476,6 +482,7 @@ app.action('attendance_weekly_summary', async ({ ack, body, client }) => {
 app.action('attendance_today_status', async ({ ack, body, client }) => {
   await ack();
   const userId = body.user.id;
+  console.log('[action] attendance_today_status user:', userId);
   const todayRows = await repo.getTodayAttendance(userId);
   const last = await repo.getLastClockInToday(userId);
   const calc = rules.calculateDayAttendance(todayRows);
@@ -489,6 +496,7 @@ app.action('attendance_today_status', async ({ ack, body, client }) => {
 app.action('attendance_home_nl_submit', async ({ ack, body, client }) => {
   await ack();
   const userId = body.user.id;
+  console.log('[action] attendance_home_nl_submit user:', userId);
   await repo.ensureUser(userId);
 
   const text = readHomeInputText(body);
@@ -504,6 +512,7 @@ app.action('attendance_home_nl_submit', async ({ ack, body, client }) => {
 // ----- App Home -----
 app.event('app_home_opened', async ({ event, client, logger }) => {
   try {
+    console.log('[event] app_home_opened user:', event.user);
     await repo.ensureUser(event.user);
     await publishHome(client, event.user);
   } catch (error) {
