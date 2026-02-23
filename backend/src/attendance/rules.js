@@ -2,7 +2,6 @@
  * Business rules: late policy, working hours calculation.
  * AI does NOT do this; server only.
  */
-import { getLastClockInToday } from './repository.js';
 import { config } from '../config.js';
 
 const DEFAULT_WORK_START = config.attendance.defaultWorkStart; // "09:00"
@@ -123,6 +122,7 @@ export function calculateDayAttendance(records, workStart = DEFAULT_WORK_START, 
  * Check if user already clocked in today (and not yet clocked out).
  */
 export async function hasOpenClockIn(slackUserId) {
+  const { getLastClockInToday } = await import('./repository.js');
   const last = await getLastClockInToday(slackUserId);
   return last !== null;
 }
