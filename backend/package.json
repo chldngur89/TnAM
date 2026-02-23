@@ -1,6 +1,6 @@
 {
   "name": "slack-attendance-ai",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Slack attendance assistant with Ollama, MariaDB/MySQL, and optional geofence",
   "type": "module",
   "main": "src/app.js",

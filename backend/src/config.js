@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 
 const OLLAMA_TIMEOUT_MS = 5000;
 const OLLAMA_RETRY_COUNT = 1;
+const FALLBACK_DASHBOARD_URL = 'https://sixpenny-bacterioscopic-wava.ngrok-free.dev';
 
 function env(key, defaultValue) {
   const v = process.env[key];
@@ -30,8 +31,25 @@ function toDisplayVersion(version) {
   return `${major}.${minor}`;
 }
 
+function normalizeDashboardUrl(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) return FALLBACK_DASHBOARD_URL;
+  try {
+    const u = new URL(value);
+    const host = u.hostname.toLowerCase();
+    const isIpv4 = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
+    if (isIpv4 || host === 'localhost' || host === '127.0.0.1') {
+      return FALLBACK_DASHBOARD_URL;
+    }
+    return u.toString().replace(/\/+$/, '');
+  } catch {
+    return FALLBACK_DASHBOARD_URL;
+  }
+}
+
 const packageVersion = readBackendPackageVersion();
 const appVersion = env('APP_VERSION', packageVersion);
+const dashboardUrl = normalizeDashboardUrl(env('WEB_DASHBOARD_URL', FALLBACK_DASHBOARD_URL));
 
 export const config = {
   port: Number(env('PORT', '3000')),
@@ -54,7 +72,7 @@ export const config = {
     connectionString: env('DATABASE_URL', 'mysql://root@localhost:3306/attendance'),
   },
   web: {
-    dashboardUrl: env('WEB_DASHBOARD_URL', 'https://sixpenny-bacterioscopic-wava.ngrok-free.dev'),
+    dashboardUrl,
   },
   attendance: {
     defaultWorkStart: env('ATTENDANCE_WORK_START', '09:00'),
