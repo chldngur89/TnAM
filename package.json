@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:dashboard": "vite build --base /dashboard/",
     "dev": "vite",
     "bot:version:minor": "npm --prefix backend run version:minor"
   },

@@ -6,6 +6,9 @@ import 'dotenv/config';
  * - Natural language (app_mention or DM) → Ollama intent → server logic
  * - Optional: POST /location for GPS updates (geofence auto clock)
  */
+import path from 'node:path';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import pkg from '@slack/bolt';
 const { App, ExpressReceiver } = pkg;
@@ -33,6 +36,21 @@ const app = new App({
 });
 
 const webApp = express();
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const dashboardDistDir = path.resolve(currentDir, '../../dist');
+
+function mountDashboardRoutes(appServer) {
+  if (!existsSync(dashboardDistDir)) {
+    console.log(`[dashboard] dist not found at ${dashboardDistDir}`);
+    return;
+  }
+
+  appServer.use('/dashboard', express.static(dashboardDistDir));
+  appServer.get(['/dashboard', '/dashboard/*'], (req, res) => {
+    res.sendFile(path.join(dashboardDistDir, 'index.html'));
+  });
+  console.log(`[dashboard] serving static files from ${dashboardDistDir} on /dashboard`);
+}
 
 function toDateKey(value) {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
@@ -350,6 +368,8 @@ function readHomeInputText(body) {
   const textValue = block.attendance_home_nl_text?.value;
   return typeof textValue === 'string' ? textValue.trim() : '';
 }
+
+mountDashboardRoutes(webApp);
 
 // ----- Basic health endpoint for EC2/LB checks -----
 webApp.get('/', (req, res) => {
