@@ -1,6 +1,8 @@
 /**
  * Configuration. Load from env (use dotenv in production if needed).
  */
+import { readFileSync } from 'node:fs';
+
 const OLLAMA_TIMEOUT_MS = 5000;
 const OLLAMA_RETRY_COUNT = 1;
 
@@ -10,8 +12,33 @@ function env(key, defaultValue) {
   return defaultValue;
 }
 
+function readBackendPackageVersion() {
+  try {
+    const raw = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.version === 'string' && parsed.version.trim() !== '') {
+      return parsed.version.trim();
+    }
+  } catch {
+    // no-op
+  }
+  return '1.0.0';
+}
+
+function toDisplayVersion(version) {
+  const [major = '1', minor = '0'] = String(version).split('.');
+  return `${major}.${minor}`;
+}
+
+const packageVersion = readBackendPackageVersion();
+const appVersion = env('APP_VERSION', packageVersion);
+
 export const config = {
   port: Number(env('PORT', '3000')),
+  app: {
+    version: appVersion,
+    displayVersion: toDisplayVersion(appVersion),
+  },
   slack: {
     signingSecret: env('SLACK_SIGNING_SECRET', ''),
     botToken: env('SLACK_BOT_TOKEN', ''),
@@ -25,6 +52,9 @@ export const config = {
   },
   db: {
     connectionString: env('DATABASE_URL', 'mysql://root@localhost:3306/attendance'),
+  },
+  web: {
+    dashboardUrl: env('WEB_DASHBOARD_URL', ''),
   },
   attendance: {
     defaultWorkStart: env('ATTENDANCE_WORK_START', '09:00'),

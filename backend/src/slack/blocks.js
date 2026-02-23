@@ -5,6 +5,8 @@ import { config } from '../config.js';
 
 export function attendanceMenuBlocks() {
   const now = new Date();
+  const dashboardUrl = config.web.dashboardUrl?.trim();
+  const title = `🕐 출퇴근 도우미 ver${config.app.displayVersion}`;
   const timeStr = now.toLocaleTimeString('ko-KR', {
     timeZone: config.attendance.timezone,
     hour: '2-digit',
@@ -18,10 +20,10 @@ export function attendanceMenuBlocks() {
     weekday: 'short',
   });
 
-  return [
+  const blocks = [
     {
       type: 'header',
-      text: { type: 'plain_text', text: '🕐 출퇴근 도우미', emoji: true },
+      text: { type: 'plain_text', text: title, emoji: true },
     },
     {
       type: 'section',
@@ -85,6 +87,21 @@ export function attendanceMenuBlocks() {
       ],
     },
   ];
+
+  if (dashboardUrl) {
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '웹 대시보드 열기', emoji: true },
+          url: dashboardUrl,
+        },
+      ],
+    });
+  }
+
+  return blocks;
 }
 
 export function ephemeralBlocks(text) {

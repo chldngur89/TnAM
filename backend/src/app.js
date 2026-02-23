@@ -61,10 +61,12 @@ function formatHomeDate(value = new Date()) {
 
 function buildHomeView({ todayRows, isWorking, flashMessage = '' }) {
   const rows = Array.isArray(todayRows) ? todayRows : [];
+  const dashboardUrl = config.web.dashboardUrl?.trim();
   const calc = rules.calculateDayAttendance(rows);
   const now = new Date();
   const nowTime = formatHomeTime(now);
   const nowDate = formatHomeDate(now);
+  const title = `🕐 출퇴근 도우미 ver${config.app.displayVersion}`;
   const firstClockIn = rows[0]?.clock_in_at ? formatHomeTime(rows[0].clock_in_at) : '-';
   const latest = rows[rows.length - 1];
   const lastClockOut = latest?.clock_out_at
@@ -91,7 +93,7 @@ function buildHomeView({ todayRows, isWorking, flashMessage = '' }) {
   const blocks = [
     {
       type: 'header',
-      text: { type: 'plain_text', text: '🕐 출퇴근 도우미', emoji: true },
+      text: { type: 'plain_text', text: title, emoji: true },
     },
     {
       type: 'section',
@@ -109,7 +111,7 @@ function buildHomeView({ todayRows, isWorking, flashMessage = '' }) {
       elements: [
         {
           type: 'mrkdwn',
-          text: `${nowDate} · 상태: *${statusText}*`,
+          text: `${nowDate} · 상태: *${statusText}* · ver${config.app.displayVersion}`,
         },
       ],
     },
@@ -152,6 +154,20 @@ function buildHomeView({ todayRows, isWorking, flashMessage = '' }) {
         },
       ],
     },
+    ...(dashboardUrl
+      ? [
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: '웹 대시보드 열기', emoji: true },
+                url: dashboardUrl,
+              },
+            ],
+          },
+        ]
+      : []),
     { type: 'divider' },
     {
       type: 'section',

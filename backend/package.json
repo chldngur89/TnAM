@@ -8,6 +8,7 @@
     "start": "node src/app.js",
     "dev": "node --watch src/app.js",
     "dev:local": "node --watch src/app.js",
+    "version:minor": "npm version minor --no-git-tag-version",
     "db:migrate": "node src/attendance/migrate.js",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down"
